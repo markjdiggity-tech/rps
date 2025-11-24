@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D Rock-Paper-Scissors Battle Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Define the Northern Lights animation */
+        @keyframes aurora-scroll {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .aurora-bg {
+            background: linear-gradient(-45deg, #1e3a8a, #047857, #15803d, #65a30d);
+            background-size: 400% 400%;
+            animation: aurora-scroll 15s ease infinite;
+        }
+
+        /* Custom styling for canvas container */
+        .canvas-container {
+            width: 100%;
+            max-width: 900px;
+            aspect-ratio: 1 / 1; /* Keep canvas square */
+            margin: 0 auto;
+            border-radius: 1rem;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+            overflow: hidden;
+            background-color: #0d1a2f; /* Dark background for the simulation area */
+        }
+
+        /* Style for the range sliders */
+        input[type=range] {
+            @apply appearance-none w-full h-2 bg-gray-700 rounded-lg cursor-pointer;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            @apply appearance-none w-4 h-4 bg-indigo-500 rounded-full shadow-lg transition-colors duration-200;
+        }
+        input[type=range]::-moz-range-thumb {
+            @apply w-4 h-4 bg-indigo-500 rounded-full shadow-lg;
+        }
+
+        .epic-result {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-shadow: 0 0 10px #fff, 0 0 20px #0ea5e9, 0 0 30px #0ea5e9;
+            animation: pulse 1s infinite alternate;
+        }
+
+        @keyframes pulse {
+            from { transform: translate(-50%, -50%) scale(1); opacity: 0.9; }
+            to { transform: translate(-50%, -50%) scale(1.05); opacity: 1; }
+        }
+
+        .text-rock { color: #f87171; } /* Red-400 */
+        .text-paper { color: #60a5fa; } /* Blue-400 */
+        .text-scissors { color: #4ade80; } /* Green-400 */
+
+    </style>
+</head>
+<body class="aurora-bg min-h-screen p-4 sm:p-8 flex flex-col items-center text-white font-sans">
+
+    <div class="w-full max-w-5xl bg-gray-900/80 p-6 rounded-xl shadow-2xl backdrop-blur-sm">
+        <h1 class="text-3xl sm:text-4xl font-extrabold text-center mb-6 text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-indigo-500">
+            🌌 RPS Planetary Battle Simulator 🛡️
+        </h1>
+
+        <!-- Controls Section -->
+        <div id="controls" class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+
+            <!-- Initial Counts -->
+            <div class="col-span-2 md:col-span-3 grid grid-cols-3 gap-4">
+                <div class="p-2 bg-gray-800 rounded-lg">
+                    <label for="rockCount" class="block text-xs font-semibold text-gray-400 text-rock">ROCK 🪨</label>
+                    <input type="range" id="rockCount" min="3" max="10" value="5" oninput="updateLabel('rockLabel', this.value)">
+                    <span id="rockLabel" class="block text-center text-sm font-bold text-rock">5</span>
+                </div>
+                <div class="p-2 bg-gray-800 rounded-lg">
+                    <label for="paperCount" class="block text-xs font-semibold text-gray-400 text-paper">PAPER 📄</label>
+                    <input type="range" id="paperCount" min="3" max="10" value="5" oninput="updateLabel('paperLabel', this.value)">
+                    <span id="paperLabel" class="block text-center text-sm font-bold text-paper">5</span>
+                </div>
+                <div class="p-2 bg-gray-800 rounded-lg">
+                    <label for="scissorsCount" class="block text-xs font-semibold text-gray-400 text-scissors">SCISSORS ✂️</label>
+                    <input type="range" id="scissorsCount" min="3" max="10" value="5" oninput="updateLabel('scissorsLabel', this.value)">
+                    <span id="scissorsLabel" class="block text-center text-sm font-bold text-scissors">5</span>
+                </div>
+            </div>
+
+            <!-- Size and Speed -->
+            <div class="p-2 bg-gray-800 rounded-lg">
+                <label for="iconSize" class="block text-xs font-semibold text-gray-400">SIZE</label>
+                <input type="range" id="iconSize" min="10" max="30" value="18" oninput="updateLabel('sizeLabel', this.value + 'px')">
+                <span id="sizeLabel" class="block text-center text-sm font-bold">18px</span>
+            </div>
+            <div class="p-2 bg-gray-800 rounded-lg">
+                <label for="speedFactor" class="block text-xs font-semibold text-gray-400">SPEED</label>
+                <input type="range" id="speedFactor" min="1" max="5" step="0.5" value="2.5" oninput="updateLabel('speedLabel', this.value)">
+                <span id="speedLabel" class="block text-center text-sm font-bold">2.5</span>
+            </div>
+
+        </div>
+
+        <!-- Action Button and Running Totals -->
+        <div class="flex flex-col sm:flex-row gap-4 items-center mb-6">
+            <button id="startButton" class="w-full sm:w-1/3 py-3 px-6 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold rounded-xl transition duration-300 shadow-xl shadow-indigo-600/40">
+                🚀 Start Battle Simulation
+            </button>
+            <div class="flex justify-around w-full sm:w-2/3 p-3 bg-gray-800 rounded-xl font-mono text-lg">
+                <div class="text-rock">Rock: <span id="rockTotal">0</span></div>
+                <div class="text-paper">Paper: <span id="paperTotal">0</span></div>
+                <div class="text-scissors">Scissors: <span id="scissorsTotal">0</span></div>
+            </div>
+        </div>
+
+
+        <!-- Simulation Area -->
+        <div class="canvas-container relative">
+            <canvas id="battleCanvas" class="w-full h-full"></canvas>
+            <div id="resultDisplay" class="hidden epic-result text-6xl text-center font-black"></div>
+        </div>
+
+    </div>
+
+    <script>
+        // Global variables and constants
+        const canvas = document.getElementById('battleCanvas');
+        const ctx = canvas.getContext('2d');
+        const startButton = document.getElementById('startButton');
+
+        // State variables
+        let animationFrameId = null;
+        let isRunning = false;
+        let rpsEntities = [];
+
+        // Configuration
+        const CONFIG = {
+            ROCK: { type: 'rock', color: '#f87171', emoji: '🪨' },
+            PAPER: { type: 'paper', color: '#60a5fa', emoji: '📄' },
+            SCISSORS: { type: 'scissors', color: '#4ade80', emoji: '✂️' },
+            COLLISION_BOUNCE_FACTOR: -1.05, // Slight increase to prevent sticking
+        };
+
+        // Utility to update range labels
+        function updateLabel(id, value) {
+            document.getElementById(id).textContent = value;
+        }
+
+        // Object Class
+        class RPSEntity {
+            constructor(type, x, y, radius, speed, config) {
+                this.type = type;
+                this.x = x;
+                this.y = y;
+                this.radius = radius;
+                this.color = config.color;
+                this.emoji = config.emoji;
+                this.vx = (Math.random() - 0.5) * 2 * speed;
+                this.vy = (Math.random() - 0.5) * 2 * speed;
+                this.mass = radius * radius; // Mass proportional to area/size
+            }
+
+            // Draw the entity (using text emoji for distinct icons)
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                // Draw the collision mask (circle)
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Draw emoji on top
+                ctx.font = `${this.radius * 1.5}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(this.emoji, this.x, this.y);
+            }
+
+            // Move the entity
+            move() {
+                this.x += this.vx;
+                this.y += this.vy;
+            }
+
+            // Handle wall collision (bounce)
+            handleWallCollision(width, height) {
+                // X-axis collision
+                if (this.x + this.radius > width || this.x - this.radius < 0) {
+                    this.vx *= CONFIG.COLLISION_BOUNCE_FACTOR;
+                    // Keep within bounds
+                    if (this.x + this.radius > width) this.x = width - this.radius;
+                    if (this.x - this.radius < 0) this.x = this.radius;
+                }
+                // Y-axis collision
+                if (this.y + this.radius > height || this.y - this.radius < 0) {
+                    this.vy *= CONFIG.COLLISION_BOUNCE_FACTOR;
+                    // Keep within bounds
+                    if (this.y + this.radius > height) this.y = height - this.radius;
+                    if (this.y - this.radius < 0) this.y = this.radius;
+                }
+            }
+
+            // Change type after a loss
+            transform(newType, newConfig) {
+                this.type = newType;
+                this.color = newConfig.color;
+                this.emoji = newConfig.emoji;
+            }
+        }
+
+        // --- Core Game Logic Functions ---
+
+        // Resizes canvas to fit container while maintaining aspect ratio
+        function resizeCanvas() {
+            const container = canvas.parentElement;
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+        }
+
+        // Initialization of entities
+        function initEntities() {
+            rpsEntities = [];
+            const rockCount = parseInt(document.getElementById('rockCount').value);
+            const paperCount = parseInt(document.getElementById('paperCount').value);
+            const scissorsCount = parseInt(document.getElementById('scissorsCount').value);
+            const radius = parseInt(document.getElementById('iconSize').value);
+            const speed = parseFloat(document.getElementById('speedFactor').value);
+
+            const typesToCreate = [
+                ...Array(rockCount).fill('rock'),
+                ...Array(paperCount).fill('paper'),
+                ...Array(scissorsCount).fill('scissors')
+            ];
+
+            const padding = radius * 2;
+            const maxAttempts = 1000;
+
+            typesToCreate.forEach(type => {
+                let entityConfig;
+                if (type === 'rock') entityConfig = CONFIG.ROCK;
+                else if (type === 'paper') entityConfig = CONFIG.PAPER;
+                else entityConfig = CONFIG.SCISSORS;
+
+                let x, y, attempt;
+                let collided = true;
+
+                // Try to find a non-colliding initial position
+                for (attempt = 0; attempt < maxAttempts && collided; attempt++) {
+                    x = Math.random() * (canvas.width - padding) + radius;
+                    y = Math.random() * (canvas.height - padding) + radius;
+                    collided = rpsEntities.some(other => {
+                        const dx = x - other.x;
+                        const dy = y - other.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        return distance < radius + other.radius;
+                    });
+                }
+
+                if (attempt < maxAttempts) {
+                    rpsEntities.push(new RPSEntity(type, x, y, radius, speed, entityConfig));
+                } else {
+                    console.error("Could not find a clear starting position for all entities.");
+                }
+            });
+        }
+
+        // Collision detection and battle resolution
+        function handleCollisions() {
+            const N = rpsEntities.length;
+            for (let i = 0; i < N; i++) {
+                const entityA = rpsEntities[i];
+
+                for (let j = i + 1; j < N; j++) {
+                    const entityB = rpsEntities[j];
+
+                    const dx = entityB.x - entityA.x;
+                    const dy = entityB.y - entityA.y;
+                    const distanceSq = dx * dx + dy * dy;
+                    const combinedRadius = entityA.radius + entityB.radius;
+                    const combinedRadiusSq = combinedRadius * combinedRadius;
+
+                    // 1. Check for collision
+                    if (distanceSq < combinedRadiusSq) {
+                        const distance = Math.sqrt(distanceSq);
+                        const normalX = dx / distance;
+                        const normalY = dy / distance;
+
+                        // Calculate relative velocity
+                        const relVelX = entityB.vx - entityA.vx;
+                        const relVelY = entityB.vy - entityA.vy;
+
+                        // Velocity along the normal
+                        const speedAlongNormal = relVelX * normalX + relVelY * normalY;
+
+                        // Only resolve if objects are moving towards each other
+                        if (speedAlongNormal < 0) {
+                            // 2. Battle Logic (Different Types)
+                            if (entityA.type !== entityB.type) {
+                                // R > S, S > P, P > R
+                                let winner = null;
+                                let loser = null;
+
+                                if ((entityA.type === 'rock' && entityB.type === 'scissors') || (entityA.type === 'scissors' && entityB.type === 'rock')) {
+                                    winner = entityA.type === 'rock' ? entityA : entityB;
+                                    loser = entityA.type === 'rock' ? entityB : entityA;
+                                } else if ((entityA.type === 'scissors' && entityB.type === 'paper') || (entityA.type === 'paper' && entityB.type === 'scissors')) {
+                                    winner = entityA.type === 'scissors' ? entityA : entityB;
+                                    loser = entityA.type === 'scissors' ? entityB : entityA;
+                                } else if ((entityA.type === 'paper' && entityB.type === 'rock') || (entityA.type === 'rock' && entityB.type === 'paper')) {
+                                    winner = entityA.type === 'paper' ? entityA : entityB;
+                                    loser = entityA.type === 'paper' ? entityB : entityA;
+                                }
+
+                                if (winner && loser) {
+                                    // Loser becomes the winner's type (no loss of icon count)
+                                    if (loser === entityA) {
+                                        entityA.transform(winner.type, winner.type === 'rock' ? CONFIG.ROCK : (winner.type === 'paper' ? CONFIG.PAPER : CONFIG.SCISSORS));
+                                    } else {
+                                        entityB.transform(winner.type, winner.type === 'rock' ? CONFIG.ROCK : (winner.type === 'paper' ? CONFIG.PAPER : CONFIG.SCISSORS));
+                                    }
+                                }
+
+                                // Apply bounce after transformation (to separate them)
+                                applySimpleBounce(entityA, entityB, distance, combinedRadius, normalX, normalY, speedAlongNormal);
+
+                            } else {
+                                // 3. Same Type Collision (Bounce)
+                                applySimpleBounce(entityA, entityB, distance, combinedRadius, normalX, normalY, speedAlongNormal);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Simple bounce implementation for same-type or post-battle separation
+        function applySimpleBounce(entityA, entityB, distance, combinedRadius, normalX, normalY, speedAlongNormal) {
+             // Penetration correction (to prevent sticking)
+            const penetrationDepth = combinedRadius - distance;
+            const correction = penetrationDepth / 2.0;
+            entityA.x -= normalX * correction;
+            entityA.y -= normalY * correction;
+            entityB.x += normalX * correction;
+            entityB.y += normalY * correction;
+
+            // Simple velocity reversal along the normal (perfectly elastic for simplicity)
+            const impulse = CONFIG.COLLISION_BOUNCE_FACTOR * speedAlongNormal;
+
+            entityA.vx += impulse * normalX;
+            entityA.vy += impulse * normalY;
+            entityB.vx -= impulse * normalX;
+            entityB.vy -= impulse * normalY;
+        }
+
+        // Update the running total display
+        function updateTotals() {
+            const counts = { rock: 0, paper: 0, scissors: 0 };
+            rpsEntities.forEach(e => counts[e.type]++);
+
+            document.getElementById('rockTotal').textContent = counts.rock;
+            document.getElementById('paperTotal').textContent = counts.paper;
+            document.getElementById('scissorsTotal').textContent = counts.scissors;
+
+            return counts;
+        }
+
+        // Check for victory condition
+        function checkVictory(counts) {
+            const typesPresent = Object.values(counts).filter(c => c > 0).length;
+            if (typesPresent <= 1) {
+                // Determine the winner
+                let winnerType = null;
+                if (counts.rock > 0) winnerType = 'ROCK 🪨';
+                else if (counts.paper > 0) winnerType = 'PAPER 📄';
+                else if (counts.scissors > 0) winnerType = 'SCISSORS ✂️';
+
+                stopSimulation();
+                displayResult(winnerType);
+                return true;
+            }
+            return false;
+        }
+
+        function displayResult(winnerType) {
+            const resultDisplay = document.getElementById('resultDisplay');
+            resultDisplay.textContent = winnerType ? `${winnerType} WINS!` : "DRAW!";
+            resultDisplay.classList.remove('hidden');
+
+            // Apply specific text color for epic display
+            resultDisplay.classList.remove('text-rock', 'text-paper', 'text-scissors');
+            if (winnerType && winnerType.includes('ROCK')) resultDisplay.classList.add('text-rock');
+            else if (winnerType && winnerType.includes('PAPER')) resultDisplay.classList.add('text-paper');
+            else if (winnerType && winnerType.includes('SCISSORS')) resultDisplay.classList.add('text-scissors');
+
+        }
+
+        // --- Animation Loop ---
+
+        function gameLoop() {
+            if (!isRunning) return;
+
+            // Clear the canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Update positions, handle wall collisions, and draw
+            rpsEntities.forEach(entity => {
+                entity.move();
+                entity.handleWallCollision(canvas.width, canvas.height);
+                entity.draw();
+            });
+
+            // Handle object-to-object collisions and battles
+            handleCollisions();
+
+            // Update totals and check for victory
+            const counts = updateTotals();
+            if (checkVictory(counts)) {
+                return; // Stop loop if victory is achieved
+            }
+
+            // Request next frame
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        // --- Control Functions ---
+
+        function startSimulation() {
+            if (isRunning) return;
+
+            // 1. Reset/Prepare UI
+            startButton.textContent = '⏸️ Stop Simulation';
+            startButton.classList.remove('bg-indigo-600/50', 'hover:bg-indigo-700/50', 'active:bg-indigo-800/50');
+            startButton.classList.add('bg-red-600', 'hover:bg-red-700', 'active:bg-red-800');
+            document.getElementById('resultDisplay').classList.add('hidden');
+            document.querySelectorAll('#controls input').forEach(input => input.disabled = true);
+
+            // 2. Initialize Game State
+            resizeCanvas();
+            initEntities();
+            updateTotals();
+
+            // 3. Start Loop
+            isRunning = true;
+            gameLoop();
+        }
+
+        function stopSimulation() {
+            if (!isRunning) return;
+
+            // 1. Stop Loop
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+
+            // 2. Reset UI
+            isRunning = false;
+            startButton.textContent = '🚀 Start Battle Simulation';
+            startButton.classList.remove('bg-red-600', 'hover:bg-red-700', 'active:bg-red-800');
+            startButton.classList.add('bg-indigo-600', 'hover:bg-indigo-700', 'active:bg-indigo-800');
+            document.querySelectorAll('#controls input').forEach(input => input.disabled = false);
+        }
+
+        // Attach Event Listeners
+        startButton.addEventListener('click', () => {
+            if (isRunning) {
+                stopSimulation();
+            } else {
+                startSimulation();
+            }
+        });
+
+        window.addEventListener('resize', () => {
+            // Only resize the canvas if the simulation is not running
+            // or we will get visual glitches mid-battle
+            if (!isRunning) {
+                resizeCanvas();
+            }
+        });
+
+        // Initial setup on load
+        window.onload = () => {
+            resizeCanvas();
+            updateTotals(); // Ensure totals are 0 initially
+        }
+    </script>
+</body>
+</html>
